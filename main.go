@@ -7,19 +7,29 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
-const CountUrls = 10
-
-const ParseUrl = "https://lux.fm/"
-
-var mainUrl = getHostName(ParseUrl)
-
 func main() {
-	links := getLinksByUrl(ParseUrl)
 
-	for i := 0; i <= CountUrls; i++ {
+	urlToParse := os.Args[1]
+	mainUrl := getHostName(urlToParse)
+	links := getLinksByUrl(urlToParse)
+
+	countUrls := 10
+	if len(os.Args) > 2 {
+		cs, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			panic(err)
+		}
+		countUrls = cs
+	}
+
+	countLinks := 1
+	for i := 1; countLinks <= countUrls; i++ {
 		parseLink := parseUrl(links[i])
 		link := ""
 		if parseLink.Host == "" {
@@ -27,8 +37,12 @@ func main() {
 		} else {
 			link = links[i]
 		}
-		printTitleUrl(link)
+		countLinks++
+		go printTitleUrl(link)
 	}
+
+	time.Sleep(time.Second)
+	fmt.Println("done")
 }
 
 func printTitleUrl(siteUrl string) {
@@ -38,13 +52,18 @@ func printTitleUrl(siteUrl string) {
 
 func getLinksByUrl(siteUrl string) []string {
 
-	links := make([]string, 0, CountUrls)
+	links := make([]string, 0)
 
 	resp, err := http.Get(siteUrl)
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	bodyString := string(body)
@@ -56,7 +75,7 @@ func getLinksByUrl(siteUrl string) []string {
 
 	doc.Find("a").Each(func(index int, link *goquery.Selection) {
 		href, ok := link.Attr("href")
-		if ok && len(links) <= CountUrls {
+		if ok {
 			links = append(links, strings.Trim(href, " "))
 		}
 	})
@@ -69,7 +88,12 @@ func getTitleByUrl(siteUrl string) string {
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	bodyString := string(body)
@@ -78,12 +102,12 @@ func getTitleByUrl(siteUrl string) string {
 	if err != nil {
 		panic(err)
 	}
-	href := ""
-	doc.Find("title").Each(func(index int, link *goquery.Selection) {
-		href = link.Text()
+	title := ""
+	doc.Find("title").Each(func(index int, attr *goquery.Selection) {
+		title = attr.Text()
 	})
 
-	return href
+	return title
 }
 
 func getHostName(siteUrl string) string {
